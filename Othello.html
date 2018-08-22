@@ -1,0 +1,292 @@
+<html>
+	<style>
+	
+	</style>
+	<body>
+		
+		<canvas id="cv" width="512" height="512" onclick="place(event);"></canvas>
+		
+		<p id="pp"></p>
+		<button onclick="init()"> Reset </button>
+	</body>
+	<script>
+	
+	
+	
+	let ctx = cv.getContext("2d");
+	let player = 1;
+	let w = cv.width;
+	let h = cv.height;
+	let sx = w / 10;
+	let sy = h / 10;
+	let gover = false;
+	let playerColor = ["#000","#fff","#444","#bbb"];
+	let playerDialog = ["Black","White"];
+	let playerColorTrans = ["rgba(0,0,0,.3)","rgba(255,255,255,.3)"];
+	const bg = "#0a0";
+	let grid = [];
+	init();
+	function init(){
+	grid = [
+		[0,0,0,0,0,0,0,0],
+		[0,0,0,0,0,0,0,0],
+		[0,0,0,0,0,0,0,0],
+		[0,0,0,2,1,0,0,0],
+		[0,0,0,1,2,0,0,0],
+		[0,0,0,0,0,0,0,0],
+		[0,0,0,0,0,0,0,0],
+		[0,0,0,0,0,0,0,0]
+	];
+	player = 1;
+	gover = false;
+	pp.innerHTML = "Player "+player+" "+playerDialog[player-1];
+	render();
+	//loopTransaction(("F5D6C5F6C4F4E6D7E7C6F7D8C8E8G5B8E3F8B6B5A6A4A5A7C7B4G6H6H7B3D3C3C2C1H5D2E2F1B1D1B2A3E1H4H3G4G3F3G1F2B7H2H1G7"));
+	//loopTransaction(("D3E3F4G3F3C5H3F2C4C3E2E1B3H4H5A3"));
+	//loopTransaction("E6F4C3C4D3D6C5C6D7B5B6F7A6A5B4A7F3C8E8C7F6E7G8G6F8F5G4E3D2H3G5G3H4H5H7D8B8A4B3D1C1B1C2E1E2A3B7F2F1G1B2A2G2H6H2G7");
+	//loopTransaction(("F5D6C5F6C4F4E6D7E7C6F7D8C8E8G5B8E3F8B6B5A6A4A5A7C7B4G6H6H7B3D3C3C2C1H5D2E2F1B1D1B2A3E1H4H3G4G3F3G1"));
+	}
+	//Ignore this
+	function loopTranscript(actList){
+		const alphanum = {_a:0,_b:1,_c:2,_d:3,_e:4,_f:5,_g:6,_h:7};
+		if((actList.length & 1))throw "String length of transaction Must be even! not !!odd!!";
+		let i = 0,isValid = 0;
+		let len = actList.length;
+		window.setTimeout(aa,50);
+		function aa(){
+		
+			let alpha = actList.charAt(i).toLowerCase();
+			let posy = actList.charAt(i+1);
+			if(place2(alphanum["_"+alpha],Number(posy)-1) === 0)isValid++;
+			ctx.fillStyle="rgba(255,0,0,.5)";
+			ctx.fillRect((alphanum["_"+alpha]+1)*sx,(Number(posy))*sy,sx,sy);
+			
+			i+=2;
+			if(i < len){window.setTimeout(aa,50);}else{console.log("Count "+isValid);}
+		}
+	}
+	//For mouse input
+	function place(e){
+		let x = e.pageX - cv.offsetLeft;
+		let y = e.pageY - cv.offsetTop;
+		let px = Math.floor(x/sx) - 1;
+		let py = Math.floor(y/sy) - 1;
+		place2(px,py);
+	}
+	function place2(px,py){
+	if(grid[py][px]!==0)return 1;
+	if(px >= 0 && px < 8 && py >= 0 && py < 8)
+		if(isPlaceable(px,py)){
+			grid[py][px] = player;
+			strike(px,py);
+			player = getOppo(player);
+			if(checkIsFull(player) ){
+				if(checkIsFull(getOppo(player))){
+					gover = true;
+					pp.innerHTML = ["Tie","Player 1 Win ("+playerDialog[0]+")","Player 2 Win ("+playerDialog[1]+")"][getWinner()];
+				}else{
+					player = getOppo(player);
+					pp.innerHTML = "Player Skipped! ,Player "+player+" "+playerDialog[player-1];
+					
+				}
+			}else{
+			pp.innerHTML = "Player "+player+" "+playerDialog[player-1];
+			}
+			render();
+		}
+		return 0;
+	}
+	function render(){
+	    //background color
+		ctx.fillStyle = bg;
+		ctx.fillRect(0,0,w,h);
+		//border color
+		ctx.fillStyle = "#fa5";
+		ctx.fillRect(sx,0,8*sx,sy);
+		ctx.fillRect(sx,9*sy,8*sx,sy);
+		ctx.fillRect(0,sy,sx,8*sy);
+		ctx.fillRect(9*sx,sy,sx,8*sy);
+		
+		let p1 = 0,p2 = 0;
+		for(let i=0;i<8;i++){
+			for(let j=0;j<8;j++){
+				switch(grid[j][i]){
+					case 0 : ctx.fillStyle = (isPlaceable(i,j)?playerColorTrans[player-1]:bg); break;
+					case 1 : ctx.fillStyle = playerColor[0]; p1++;break;
+					case 2 : ctx.fillStyle = playerColor[1]; p2++;break;
+				}
+				ctx.beginPath();
+				ctx.arc((i+1)*sx+sx/2,(j+1)*sy+sy/2,sx*.45,-Math.PI,Math.PI);
+				ctx.fill();
+				//ctx.fillRect(i*sx,j*sy,sx,sy);
+				ctx.strokeRect((i+1)*sx,(j+1)*sy,sx,sy);
+			}
+		}
+		
+		ctx.save();
+		ctx.fillStyle = "#000";
+		ctx.textAlign = "center";
+		ctx.textBaseline = "middle";
+		ctx.font = ((sx + sy) / 2 * .45)+"px courier";
+		for(let i=0;i<8;i++){
+			let text = ["a","b","c","d","e","f","g","h"][i]
+			ctx.fillText(text,(i+1)*sx+sx/2,sy/2);
+			ctx.fillText(text,(i+1)*sx+sx/2,(9*sy)+sy/2);
+			ctx.fillText(i+1,sx/2,(i+1)*sy+sy/2);
+			ctx.fillText(i+1,(9 *sx)+sx/2,(i+1)*sy+sy/2);
+		}
+		ctx.restore();
+		pp.innerHTML += "<br> [B: "+p1+" ,W: "+p2+" ]";
+	}
+	function checkIsFull(side){
+		let tside = player;
+		player = side;
+		let isPlace = false;
+		for(let i=0;i<8;i++){
+			for(let j=0;j<8;j++){
+				isPlace |= isPlaceable(i,j) > 0 && grid[j][i] === 0;
+			}
+		}
+		player = tside;
+		return !isPlace;
+	}
+	//this function is work by checking whether is at least outflanked some opponents
+	//Maybe the code itself can be self explained,so i wont to be explain so much
+	function isPlaceable(x,y){
+		let oppo = getOppo(player);
+		let isFound = 0;
+		/*
+		List :
+		1 : X+
+		2 : X-
+		4 : Y+
+		8 : Y-
+		16 : X+ Y+
+		32 : X+ Y-
+		64 : X- Y+
+		128 : X- Y- 
+		*/
+		/**
+			The Code below is used for someone who want to know how checking is work
+		*/
+		/*
+		let flag = 0;
+		for(let i=x+1;i<8;i++){
+			if(grid[y][i] === oppo){flag = 1; continue};
+			if(grid[y][i] === player && flag){isFound |= 1; break;}else{break;}
+			if(grid[y][i] === 0){break;}
+		}
+		flag = 0;
+		for(let i=x-1;i>=0;i--){
+			if(grid[y][i] === oppo){flag = 1; continue;};
+			if(grid[y][i] === player && flag){isFound |= 2; break;}else{break;}
+			if(grid[y][i] === 0){break;}
+		}
+		flag = 0;
+		for(let i=y+1;i<8;i++){
+			if(grid[i][x] === oppo){flag = 1; continue;};
+			if(grid[i][x] === player && flag){isFound |= 4; break;}else{break;}
+			if(grid[i][x] === 0){break;}
+		}
+		flag = 0;
+		for(let i=y-1;i>=0;i--){
+			if(grid[i][x] === oppo){flag = 1; continue;};
+			if(grid[i][x] === player && flag){isFound |= 8; break;}else{break;}
+			if(grid[i][x] === 0){break;}
+		}
+		flag = 0;
+		for(let i = x+1 , j = y+1;i < 8 && j < 8; i++,j++ ){
+			if(grid[j][i] === oppo){flag = 1; continue;};
+			if(grid[j][i] === player && flag){isFound |= 16; break;}else{break;}
+			if(grid[j][i] === 0){break;}
+		}
+		flag = 0;
+		for(let i = x+1 , j = y-1;i < 8 && j >= 0; i++,j-- ){
+			if(grid[j][i] === oppo){flag = 1; continue;};
+			if(grid[j][i] === player && flag){isFound |= 32; break;}else{break;}
+			if(grid[j][i] === 0){break;}
+		}
+		flag = 0;
+		for(let i = x-1 , j = y+1;i >= 0 && j < 8; i--,j++ ){
+			if(grid[j][i] === oppo){flag = 1; continue;};
+			if(grid[j][i] === player && flag){isFound |= 64; break;}else{break;}
+			if(grid[j][i] === 0){break;}
+		}
+		flag = 0;
+		for(let i = x-1 , j = y-1;i >= 0 && j >= 0; i--,j-- ){
+			if(grid[j][i] === oppo){flag = 1; continue;};
+			if(grid[j][i] === player && flag){isFound |= 128; break;}else{break;}
+			if(grid[j][i] === 0){break;}
+		}
+		
+		*/
+		/**
+			The Code below is same as the code above
+			อันบนคิอต้นฉบับ
+			อันล่างคือสุดยอดแห่งการย่อครับ
+		*/
+		for(let k=0;k<8;k++){
+			let flag = 0;
+			let px = (k < 2)?k+1:Math.floor((k-2)/2);
+			let py = (k < 2)?0: k % 2 + 1;
+			for(let i = [x,x+1,x-1][px],
+					j =	[y,y+1,y-1][py] ; 
+					[true,i<8,i>=0][px] && 
+					[true,j<8,j>=0][py] ; 
+					i = [i,i+1,i-1][px],
+					j = [j,j+1,j-1][py]){
+						if(grid[j][i] === oppo){flag = 1; continue;};
+						if(grid[j][i] === player && flag){isFound |= 1 << k; break;}else{break;}
+						if(grid[j][i] === 0){break;}
+					}
+		}
+		
+		return isFound;
+	}
+	function strike(x,y){
+		let oppo = getOppo(player);
+		let result = isPlaceable(x,y);
+		console.log(result);
+		for(let k = 0;k<4;k++){
+			if(result & (1 << k))
+			
+			for(let i=[x+1,x-1,y+1,y-1][k]; [i < 8,i >= 0][k % 2] ; i = [i+1,i-1][k % 2])
+			{
+				let px = [i,x][Math.floor(k / 2)];
+				let py = [y,i][Math.floor(k / 2)];
+				if(grid[ py ][ px ] === oppo)grid[ py][px] = player;
+				else break;
+			}
+		}
+		for(let k = 0;k<4;k++){
+			if(result & (1 << k<<4))
+			
+			for(
+			let i = [x+1,x-1][Math.floor(k / 2)] ,
+				j = [y+1,y-1][k % 2] ; 
+				[i < 8,i >= 0][Math.floor(k / 2)] &&
+				[j < 8,j >= 0][k % 2] ; 
+				i = [i+1,i-1][Math.floor(k / 2)],
+				j = [j+1,j-1][k % 2])
+			{
+				if(grid[j][i] === oppo)grid[j][i] = player;
+				else break;
+			}
+		}
+		
+	}
+	function getWinner(){
+		let p1=0,p2=0;
+		for(let i=0;i<8;i++)
+		for(let j=0;j<8;j++){
+			switch(grid[j][i]){
+				case 1 : p1++;break;
+				case 2 : p2++;break;
+			} 
+		}
+		return p1 > p2 ? 1 : (p1 < p2 ? 2 : 0);
+	}
+	function getOppo(x){return [0,2,1][x];}
+	//By Thanawat Panjitr
+	</script>
+</html>
