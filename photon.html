@@ -1,0 +1,312 @@
+<html>
+<body>
+
+<table>
+<tr>
+<td>
+<canvas id="cv" width="800" height="600"></canvas>
+</td>
+<td>
+
+<progress id="renderProgress"></progress><br/>
+<progress id="threadProgress"></progress>
+</td>
+</tr>
+</table>
+</body>
+<script type="text/javascript" src="./photon.js"></script>
+<script src="./spectrum.js"></script>
+<script id="worker" type="norun">
+	
+let fbuff = [];
+let W = 0;
+let H = 0;
+let channelCount = 0;
+onmessage = function(e){
+	let lineList = e.data[0]; //Line list contain array of {pos:<arr>,intensity:<value>,channel:<int>}
+	W = e.data[1];
+	H = e.data[2];
+	channelCount = e.data[3];
+	fbuff = new Float32Array(W*H*channelCount);
+	let diff = e.data[5] - e.data[4];
+	let len = lineList.length;
+	for(let i=0;i<len;i++){
+		drawLine(...(lineList[i].pos),lineList[i].intensity/diff,lineList[i].channel);
+	}
+	postMessage([fbuff,e.data[5]]);
+	
+}
+
+
+
+
+function drawLine(x0,y0,x1,y1,c,ch){
+
+
+	function plot(x,y,v){
+		if(x >= 0 && x < W && y >= 0 && y < H){
+			let dx = Math.abs(x0 - x1);
+			let dy = Math.abs(y0 - y1);
+			let coeff = Math.sqrt();
+			fbuff[(x+y*W)*(channelCount)+ch] += c*v*(Math.sqrt(dx*dx+dy*dy)/Math.max(dx,dy));
+		}
+		
+	}
+	function ipart(x){
+		return Math.floor(x);
+	}
+	function round(x){
+		return ipart(x+0.5);
+	}
+	function fpart(x){
+		return x-Math.floor(x);
+	}
+	function rfpart(x){
+		return 1 - fpart(x);
+	}
+
+	let steep = Math.abs(y1-y0) > Math.abs(x1-x0);
+	if(steep ){
+		let tmp = x0;
+		x0 = y0;
+		y0 = tmp;
+		tmp = x1;
+		x1 = y1;
+		y1 = tmp;
+	}
+	if(x0 > x1){
+		let tmp = x0;
+		x0 = x1;
+		x1 = tmp;
+		tmp = y0;
+		y0 = y1;
+		y1 = tmp;
+	}
+	let dx = x1-x0;
+	let dy = y1-y0;
+	let gradient = dy / dx;
+	if(dx == 0){
+		gradient = 1.0;
+	}
+	let xend = round(x0);
+	let yend = y0+gradient*(xend-x0);
+	let xgap = rfpart(x0 + 0.5);
+	let xpxl1 = xend;
+	let ypxl1 = ipart(yend);
+
+	if(steep){
+		plot(ypxl1  ,xpxl1, rfpart(yend)*xgap);
+		plot(ypxl1+1,xpxl1,  fpart(yend)*xgap);
+	}else{
+		plot(xpxl1, ypxl1 ,rfpart(yend)*xgap);
+		plot(xpxl1, ypxl1+1,fpart(yend)*xgap);
+	}
+	let intery = yend + gradient;
+	xend = round(x1);
+	yend = y1 + gradient * (xend - x1);
+	xgap = fpart(x1+0.5);
+	let xpxl2 = xend;
+	let ypxl2 = ipart(yend);
+	if(steep ){
+		plot(ypxl2 ,xpxl2,rfpart(yend)*xgap);
+		plot(ypxl2+1,xpxl2,fpart(yend)*xgap);
+	}else{
+		plot(xpxl2,ypxl2 ,rfpart(yend)*xgap);
+		plot(xpxl2,ypxl2+1,fpart(yend)*xgap);
+	}
+	if(steep ){
+		for(let x=xpxl1+1; x < xpxl2; x++){
+			plot(ipart(intery),x,rfpart(intery));
+			plot(ipart(intery)+1,x,fpart(intery));
+			intery = intery + gradient;
+		}
+	}else{
+		for(let x=xpxl1+1; x < xpxl2; x++){
+			plot(x,ipart(intery),rfpart(intery));
+			plot(x,ipart(intery)+1,fpart(intery));
+			intery = intery + gradient;
+		}
+	}
+}
+</script>
+
+<script type="text/javascript">
+let ctx = cv.getContext("2d");
+
+let W = cv.width;
+let H = cv.height;
+
+let channelCount =30;
+let fbuff = new Float32Array(W*H*channelCount);
+let dataBuff= ctx.createImageData(W,H);
+
+
+let THREAD = new Worker("data:text/javascript,"+encodeURIComponent(worker.innerText));
+THREAD.onmessage = function(e){
+	let nnext = e.data[1];
+	copyChannel(e.data[0],iterateNNN+1);
+	copyOver();
+	ctx.putImageData(dataBuff,0,0);
+	let tmpCount = iterateCount;
+	iterateCount = nnext;
+	iterateNNN++;
+	postHelper(tmpCount);
+	threadProgress.value = iterateCount;
+	threadProgress.title = iterateCount + " / "+maxIterate;
+	
+}
+let iterateCount = 0;
+let iterateNNN = 0;
+let workerLaunched = false;
+
+let sce = new Scene(W,H);
+//sce.addLight(new planeLight(new vec2(230,50),new vec2(170,50),[20,1,10]));
+
+sce.addLight(new pointLight(new vec2(200,100) ,[100,100,100]));
+
+sce.addObject(new sphereObject(new vec2(200,200),20,sampleDielectric));
+//sce.addObject(new sphereObject(new vec2(200,200),200,sampleDiffuse));
+
+//sce.addObject(new lineObj(new vec2(500,H-250),new vec2(0,H-10),sampleDielectric));
+//sce.addObject(new lineObj(new vec2(500,H),new vec2(0,H-200),sampleDielectric));
+
+let spectrum = new Spectrum(520,630,500,590,400,480);
+spectrum.preallocate(channelCount);
+
+
+let lineList = [];
+let currIterate = 0;
+let maxIterate = 15000;
+
+//drawLine(0,0,W,H/2,1,0);
+loopOver();
+
+async function loopOver(){
+	let backgroundIterate = 1;
+	renderProgress.max = maxIterate;
+	threadProgress.max = maxIterate;
+	for(let i=0;i<maxIterate;){
+		//let currSeed = rngEngine.seed;
+		let isLimit = lineList.length;
+		if(isLimit < 10000)
+		for(let j=0;j<channelCount;j++){
+			rngEngine.seed = Math.random()*2**31;
+			let channel = j/channelCount;
+			
+			onePath(10,channel);
+			
+			
+		}
+		currIterate = i;
+
+		if(backgroundIterate  == 0){
+			await wait16();
+		if(!workerLaunched){
+			workerLaunched = true;
+			postHelper();
+		}
+		
+		renderProgress.value = i;
+		renderProgress.title = i + " / "+maxIterate;
+			
+		}
+		backgroundIterate= (backgroundIterate+1)%200;
+		if(isLimit < 10000)
+		i++;
+		
+		
+	}
+	renderProgress.value = maxIterate;
+	renderProgress.title = maxIterate + " / "+maxIterate;
+	
+}
+function postHelper(nowValue=0){
+	if(lineList.length > 0)
+	{
+		THREAD.postMessage([lineList,W,H,channelCount,nowValue,currIterate]);
+		lineList = [];
+	}
+
+}
+
+
+function onePath(pathLength,channel,time){
+	let [ro,rd] = sce.sampleLight(0,channel);
+	for(let i=0;i<pathLength;i++){
+		let ndata = rayTrace(ro,rd);
+		//console.log(ndata);
+		if(ndata[0] == -1){
+			borderTracing(ro,rd,channel,time);
+			break;
+		}
+		let nro = vec2.add(ro,vec2.scale(rd,ndata[1]));
+		let odata = sampleBrdf(ro,rd,ndata[0],ndata[1],ndata[2],channel);
+		//nro = vec2.add(nro,vec2.scale(ndata[2],odata[2]));
+		nrd = odata[1];
+		//console.log('reached',nro);
+		drawLine(ro.x,ro.y,nro.x,nro.y,50,Math.floor(channel*channelCount),time);
+		ro = nro;
+		rd = nrd.normalize();
+	}
+}
+function rayTrace(ro,rd){
+	return sce.trace(ro,rd);
+}
+function borderTracing(ro,rd,c,time){
+	let ndata = sce.border(ro,rd);
+	let nro = vec2.add(ro,vec2.scale(rd,ndata[1]));
+	drawLine(ro.x,ro.y,nro.x,nro.y,50,Math.floor(c*channelCount));
+}
+function sampleBrdf(ro,rd,i,t,normal,channel){
+	let norm =normal;
+	let tang = new vec2(-norm.y,norm.x);
+	let ntspace = vec2.scale(new vec2(vec2.dot(tang,rd) ,vec2.dot(norm,rd) ),-1);
+	let brdf = sce.sampleBRDF(ntspace,i,channel);
+	let tback = vec2.add(vec2.scale(norm,brdf.y),vec2.scale(tang,brdf.x));
+	//let translate = new vec2(norm.x * brdf.x,vec2.scale(tang,brdf.y)).normalize();
+	return [norm,tback];
+}
+function copyOver(){
+	for(let y=0;y<H;y++)
+	for(let x=0;x<W;x++){
+		let chList = [0,0,0,0];
+		for(let i=0;i<channelCount;i++){
+			
+			chList[0] += fbuff[(x+y*W)*(channelCount)+i]*spectrum.allocArr[i*3];
+			chList[1] += fbuff[(x+y*W)*(channelCount)+i]*spectrum.allocArr[i*3+1];
+			chList[2] += fbuff[(x+y*W)*(channelCount)+i]*spectrum.allocArr[i*3+2];
+			chList[3] += spectrum.allocArr[i*3+1];
+		}
+		for(let i=0;i<3;i++)
+		 chList[i] = chList[i]/chList[3];
+		chList = spectrum.getRGBnormal(chList);
+		dataBuff.data[(x+y*W)*4+0] = chList[0]*255;
+		dataBuff.data[(x+y*W)*4+1] = chList[1]*255;
+		dataBuff.data[(x+y*W)*4+2] = chList[2]*255;
+
+		dataBuff.data[(x+y*W)*4+3] = 255;
+
+	}
+}
+function copyChannel(nbuff,time){
+	for(let y=0;y<H;y++)
+	for(let x=0;x<W;x++){
+		for(let i=0;i<channelCount;i++)
+		fbuff[(x+y*W)*(channelCount)+i] = incrementAverage( fbuff[(x+y*W)*channelCount+i], 
+			nbuff[(x+y*W)*(channelCount)+i] ,time);
+		
+	}
+
+}
+function drawLine(x0,y0,x1,y1,intensity,channel){
+	lineList.push({pos:[x0,y0,x1,y1],intensity:intensity,channel:channel});
+}
+function incrementAverage(oldValue,newValue,count){
+	let t = 1/count;
+	return (1-t)*oldValue+t*newValue;
+}
+function wait16(){
+	return new Promise((r)=>{requestAnimationFrame(r)});
+}
+</script>
+</html>
